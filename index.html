@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Data Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            margin: 0;
+            background-color: #f9f9f9;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        h1 {
+            text-align: center;
+            color: #444;
+            font-size: 24px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #4CAF50;
+            color: white;
+            text-transform: uppercase;
+        }
+
+        td {
+            background-color: #fff;
+        }
+
+        tr:nth-child(even) td {
+            background-color: #f9f9f9;
+        }
+
+        tr:hover td {
+            background-color: #f1f1f1;
+        }
+
+        #table-container p {
+            text-align: center;
+            font-size: 18px;
+            color: #777;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding: 10px 0;
+        }
+
+        footer a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>QR Code Data Viewer</h1>
+    <div id="table-container">
+        <!-- Table will be generated dynamically -->
+    </div>
+
+    <footer>
+        Done by <strong>Ehsan Mokhtari</strong> for <strong>SRG Facade</strong>. <br>
+        Contact: <a href="mailto:Ehsan0921@gmail.com">Ehsan0921@gmail.com</a>
+    </footer>
+
+    <script>
+        // Function to parse query parameters
+        function parseQueryParams() {
+            const params = new URLSearchParams(window.location.search);
+            const data = {};
+            for (const [key, value] of params.entries()) {
+                data[decodeURIComponent(key)] = decodeURIComponent(value);
+            }
+            return data;
+        }
+
+        // Function to generate a table from the parsed data
+        function generateTable(data) {
+            if (Object.keys(data).length === 0) {
+                document.getElementById("table-container").innerHTML = "<p>No data found.</p>";
+                return;
+            }
+
+            let table = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            for (const [key, value] of Object.entries(data)) {
+                table += `<tr><td>${key}</td><td>${value}</td></tr>`;
+            }
+
+            table += `
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById("table-container").innerHTML = table;
+        }
+
+        // Main execution
+        const data = parseQueryParams();
+        generateTable(data);
+    </script>
+</body>
+
+</html>

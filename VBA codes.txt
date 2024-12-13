@@ -1,3 +1,76 @@
+Sub InsertImages103()
+    On Error GoTo ErrorHandler
+    
+    Dim ws As Worksheet
+    Dim imgPath As String
+    Dim imgName As String
+    Dim imgExtension As String
+    Dim imgFullName As String
+    Dim cell As Range
+
+    ' Set the path to the folder containing the images
+    imgPath = Application.ActiveWorkbook.Path & "\Images\"
+
+    Dim nameColumn As String
+    nameColumn = UCase(InputBox("Enter the column letter for image names (e.g., D):"))
+
+    Dim insertColumn As String
+    insertColumn = UCase(InputBox("Enter the column letter for image insertion (e.g., K):"))
+
+    Dim OffsetNumber As Integer
+    OffsetNumber = Asc(insertColumn) - Asc(nameColumn)
+
+    ' Loop through each worksheet in the active workbook
+    For Each ws In Application.ActiveWorkbook.Sheets
+        ' Check if the sheet is not empty
+        If WorksheetFunction.CountA(ws.Cells) <> 0 Then
+            ' Loop through each cell in the specified name column
+            For Each cell In ws.Range(nameColumn & "1:" & nameColumn & ws.Cells(ws.Rows.Count, nameColumn).End(xlUp).Row)
+                ' Get the file name from the cell
+                imgName = cell.Value
+
+                ' Get the file extension (assuming all images have the same extension, e.g., .jpg)
+                imgExtension = ".png"
+
+                ' Combine the path, name, and extension to get the full image file name
+                imgFullName = imgPath & imgName & imgExtension
+
+                ' Check if the image file exists
+                If Dir(imgFullName) <> "" Then
+                    ' Insert the image into the cell in the specified insertion column
+                    Call InsertImage103(cell.Offset(0, OffsetNumber), imgFullName)
+                Else
+                    ' Handle the case when the image file doesn't exist
+                    ' You may want to add specific code here if needed
+                End If
+            Next cell
+        End If
+    Next ws
+    MsgBox "Images inserted successfully. For any problems or issues, please contact Ehsan Mokhtari at ehsan.mokhtari@srgglobal.com.au", vbInformation
+    Exit Sub ' If no errors, skip the error handling code
+    
+ErrorHandler:
+    MsgBox "An error occurred. Please contact Ehsan." & vbCrLf & "Keep in mind" & vbCrLf & "All the images should be under a subFolder (Images).", vbExclamation
+
+End Sub
+
+Sub InsertImage103(cell As Range, imgPath As String)
+    ' Insert an image into the specified cell
+    On Error Resume Next ' Ignore errors temporarily
+    Dim pic As Picture
+    Set pic = cell.Worksheet.Pictures.Insert(imgPath)
+    On Error GoTo 0 ' Reset error handling to default
+    If Not pic Is Nothing Then
+        With pic
+            .ShapeRange.LockAspectRatio = msoFalse
+            .Top = cell.Top
+            .Left = cell.Left
+            .Width = cell.Width
+            .Height = cell.Height
+        End With
+    End If
+End Sub
+
 Option Explicit
 
 Function IsInArray(valueToFind As String, arr As Variant) As Boolean
@@ -148,7 +221,7 @@ Sub InsertQRCodes()
 
     ' Generate previous columns as data source options
     Dim columnCount As Integer
-    columnCount = Asc(qrCodeInsertColumn) - Asc("A") + 1
+    columnCount = Asc(qrCodeInsertColumn) - Asc("A") 
     If columnCount <= 1 Then
         MsgBox "Invalid column selection. Please select a column after column A.", vbExclamation
         Exit Sub
@@ -191,7 +264,7 @@ Sub InsertQRCodes()
     If rowSelection = "" Then Exit Sub
 
     ' Set QR code image folder
-    imgFolderPath = ThisWorkbook.Path & "\QRImages\"
+    imgFolderPath = ActiveWorkbook.Path & "\QRImages\"
     If Dir(imgFolderPath, vbDirectory) = "" Then MkDir imgFolderPath
 
     ' Process each row
@@ -257,4 +330,10 @@ ErrorHandler:
     Application.DisplayAlerts = True
     MsgBox "Error: " & Err.Description, vbCritical
 End Sub
+
+
+
+
+
+
 

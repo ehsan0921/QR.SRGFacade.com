@@ -1,0 +1,260 @@
+Option Explicit
+
+Function IsInArray(valueToFind As String, arr As Variant) As Boolean
+    Dim element As Variant
+    For Each element In arr
+        If element = valueToFind Then
+            IsInArray = True
+            Exit Function
+        End If
+    Next element
+    IsInArray = False
+End Function
+
+Function CreateSafeFileName(ByVal fileName As String) As String
+    Dim result As String
+    Dim i As Long
+    Dim char As String
+    
+    Const validChars As String = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+    
+    result = ""
+    For i = 1 To Len(fileName)
+        char = Mid(fileName, i, 1)
+        If InStr(validChars, char) > 0 Then
+            result = result & char
+        End If
+    Next i
+    
+    If result = "" Then result = "QRCode"
+    If Len(result) > 50 Then result = Left(result, 50)
+    
+    CreateSafeFileName = result
+End Function
+
+Function URLEncode(ByVal Value As String) As String
+    Dim i As Integer
+    Dim char As String
+    Dim result As String
+    
+    result = ""
+    For i = 1 To Len(Value)
+        char = Mid(Value, i, 1)
+        Select Case char
+            Case "0" To "9", "A" To "Z", "a" To "z", "-", "_", ".", "~"
+                result = result & char
+            Case Else
+                result = result & "%" & Right("0" & Hex(Asc(char)), 2)
+        End Select
+    Next i
+    URLEncode = result
+End Function
+
+Function CreateSerialNumber(ws As Worksheet, rowNum As Long, selectedColumnsArr() As String) As String
+    Dim result As String
+    Dim i As Integer
+    
+    For i = 0 To UBound(selectedColumnsArr)
+        Dim cellValue As String
+        cellValue = Trim(ws.Range(selectedColumnsArr(i) & rowNum).Text)
+        If cellValue <> "" Then
+            cellValue = Replace(cellValue, " ", "")
+            If Len(cellValue) > 3 Then cellValue = Left(cellValue, 3)
+            result = result & cellValue
+        End If
+    Next i
+    
+    result = result & "_" & Format(rowNum, "000")
+    result = CreateSafeFileName(result)
+    
+    CreateSerialNumber = result
+End Function
+
+Sub InsertQRCode(ws As Worksheet, qrImagePath As String, targetCell As Range)
+    Dim shp As Shape
+    Dim margin As Double
+    Dim qrWidth As Double, qrHeight As Double
+    
+    ' Delete existing shapes in the target cell
+    For Each shp In ws.Shapes
+        If Not Intersect(shp.TopLeftCell, targetCell) Is Nothing Then
+            shp.Delete
+        End If
+    Next shp
+    
+    ' Verify file exists before trying to insert
+    If Dir(qrImagePath) = "" Then
+        MsgBox "QR code image not found: " & qrImagePath, vbExclamation
+        Exit Sub
+    End If
+    
+    ' Set margin (adjust this to your preference, e.g., 10% of the cell size)
+    margin = 0.1 * targetCell.Width ' 10% of cell width
+    
+    ' Calculate QR code dimensions to fit within the cell with margin
+    qrWidth = targetCell.Width - 2 * margin
+    qrHeight = targetCell.Height - 2 * margin
+    If qrWidth > qrHeight Then qrWidth = qrHeight Else qrHeight = qrWidth ' Maintain square aspect ratio
+    
+    ' Insert and position the QR code
+    Set shp = ws.Shapes.AddPicture( _
+        fileName:=qrImagePath, _
+        LinkToFile:=msoFalse, _
+        SaveWithDocument:=msoTrue, _
+        Left:=targetCell.Left + margin, _
+        Top:=targetCell.Top + margin, _
+        Width:=qrWidth, _
+        Height:=qrHeight)
+        
+    ' Adjust shape properties
+    With shp
+        .Placement = xlMoveAndSize
+        .LockAspectRatio = msoTrue
+    End With
+End Sub
+
+
+Sub InsertQRCodes()
+    On Error GoTo ErrorHandler
+    
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    
+    Dim ws As Worksheet
+    Dim qrCodeInsertColumn As String
+    Dim dataColumns() As String
+    Dim selectedColumns As String
+    Dim selectedColumnsArr() As String
+    Dim headerRow As Long
+    Dim lastRow As Long
+    Dim rowSelection As String
+    Dim imgFolderPath As String
+    Dim rowNum As Long
+    Dim dataStr As String
+    Dim serialNumber As String
+    Dim qrImagePath As String
+    Dim downloadSuccess As Boolean
+    Dim attempts As Integer
+    Dim i As Integer
+    Dim headerText As String
+    Dim cellValue As String
+    
+    ' Set active worksheet
+    Set ws = ActiveSheet
+    
+    ' Input QR code insertion column
+    qrCodeInsertColumn = UCase(InputBox("Enter the column letter where you want to add QR codes (e.g., E):"))
+    If qrCodeInsertColumn = "" Then Exit Sub
+
+    ' Generate previous columns as data source options
+    Dim columnCount As Integer
+    columnCount = Asc(qrCodeInsertColumn) - Asc("A") + 1
+    If columnCount <= 1 Then
+        MsgBox "Invalid column selection. Please select a column after column A.", vbExclamation
+        Exit Sub
+    End If
+
+    ReDim dataColumns(columnCount - 1)
+    For i = 0 To columnCount - 1
+        dataColumns(i) = Chr(Asc("A") + i)
+    Next i
+
+    ' Show available columns with prefilled selection
+    Dim columnsMsg As String
+    columnsMsg = "Available columns for data: " & Join(dataColumns, ", ") & vbCrLf & vbCrLf
+    columnsMsg = columnsMsg & "Enter the columns you want to include (comma-separated):"
+
+    ' Create default column selection
+    Dim defaultColumns As String
+    defaultColumns = Join(dataColumns, ",")
+    selectedColumns = InputBox(columnsMsg, "Select Columns", defaultColumns)
+    If selectedColumns = "" Then Exit Sub
+
+    ' Validate and split columns into array
+    selectedColumnsArr = Split(Replace(UCase(selectedColumns), " ", ""), ",")
+    For i = 0 To UBound(selectedColumnsArr)
+        If Not IsInArray(selectedColumnsArr(i), dataColumns) Then
+            MsgBox "Invalid column selected: " & selectedColumnsArr(i), vbExclamation
+            Exit Sub
+        End If
+    Next i
+
+    ' Get header row
+    headerRow = Val(InputBox("Enter the header row number:", "Header Row", "1"))
+    If headerRow <= 0 Then Exit Sub
+
+    ' Get last row
+    lastRow = ws.Cells(ws.Rows.Count, selectedColumnsArr(0)).End(xlUp).Row
+
+    ' Row selection
+    rowSelection = InputBox("Enter rows to process (e.g., All, 2:10, 5,6,7):", "Row Selection", "All")
+    If rowSelection = "" Then Exit Sub
+
+    ' Set QR code image folder
+    imgFolderPath = ThisWorkbook.Path & "\QRImages\"
+    If Dir(imgFolderPath, vbDirectory) = "" Then MkDir imgFolderPath
+
+    ' Process each row
+    For rowNum = headerRow + 1 To lastRow
+        If rowSelection = "All" Or Evaluate("=ISNUMBER(FIND(""" & rowNum & """,""" & rowSelection & """))") Then
+            ' Generate data string with URL query parameters
+            dataStr = ""
+            For i = 0 To UBound(selectedColumnsArr)
+                headerText = Trim(ws.Range(selectedColumnsArr(i) & headerRow).Text)
+                cellValue = Trim(ws.Range(selectedColumnsArr(i) & rowNum).Text)
+                
+                If cellValue <> "" Then
+                    If dataStr <> "" Then dataStr = dataStr & "&"
+                    dataStr = dataStr & URLEncode(headerText) & "=" & URLEncode(cellValue)
+                End If
+            Next i
+
+            ' Create serial number
+            serialNumber = CreateSerialNumber(ws, rowNum, selectedColumnsArr)
+
+            ' Generate QR code URL
+            Dim qrCodeURL As String
+            Dim baseUrl As String
+            baseUrl = "https://qr.srgfacade.com/read?"
+            qrCodeURL = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" & URLEncode(baseUrl & dataStr)
+
+            ' Set file path
+            qrImagePath = imgFolderPath & serialNumber & ".png"
+
+            ' Download QR code
+            For attempts = 1 To 3
+                On Error Resume Next
+                Kill qrImagePath
+                On Error GoTo ErrorHandler
+
+                Dim curlCommand As String
+                curlCommand = "curl -o """ & qrImagePath & """ """ & qrCodeURL & """"
+                Shell curlCommand, vbHide
+                
+                Application.Wait Now + TimeSerial(0, 0, 2)
+                If Dir(qrImagePath) <> "" Then
+                    downloadSuccess = True
+                    Exit For
+                End If
+            Next attempts
+
+            If downloadSuccess Then
+                InsertQRCode ws, qrImagePath, ws.Cells(rowNum, qrCodeInsertColumn)
+            Else
+                ws.Cells(rowNum, qrCodeInsertColumn).Value = "Failed to download QR code"
+            End If
+        End If
+    Next rowNum
+
+CleanUp:
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = True
+    MsgBox "QR codes generated and inserted successfully!", vbInformation
+    Exit Sub
+    
+ErrorHandler:
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = True
+    MsgBox "Error: " & Err.Description, vbCritical
+End Sub
+
